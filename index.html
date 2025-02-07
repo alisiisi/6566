@@ -1,0 +1,183 @@
+<html lang="fa">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ابزار استخراج تصاویر از PDF و دانلود HTML</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+  <style>
+    body {
+      font-family: 'Tahoma', sans-serif;
+      margin: 0;
+      padding: 20px;
+      background-color: #f0f0f0;
+      direction: rtl;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      background-color: white;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #333;
+      text-align: center;
+    }
+    .step {
+      margin-bottom: 20px;
+    }
+    .button {
+      background-color: #4CAF50;
+      border: none;
+      color: white;
+      padding: 10px 20px;
+      text-align: center;
+      display: inline-block;
+      font-size: 16px;
+      margin: 4px 2px;
+      cursor: pointer;
+      border-radius: 5px;
+    }
+    #imageCount {
+      text-align: center;
+      margin-top: 20px;
+      font-size: 18px;
+      font-weight: bold;
+    }
+    #imageContainer {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 20px;
+    }
+    .image-wrapper {
+      width: 200px;
+      transition: transform 0.25s ease;
+      cursor: zoom-in;
+      position: relative;
+    }
+    .image-wrapper img {
+      width: 100%;
+      border-radius: 5px;
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>ابزار استخراج تصاویر از PDF و دانلود HTML</h1>
+  
+  <div class="step">
+    <h2>مرحله ۱: انتخاب فایل PDF</h2>
+    <input type="file" id="pdfFile" accept=".pdf" />
+    <button class="button" onclick="extractImages()">استخراج تصاویر</button>
+  </div>
+
+  <div id="imageCount"></div>
+  <div id="imageContainer"></div>
+  <button class="button" onclick="downloadHtml()" style="display: none;" id="downloadButton">دانلود HTML</button>
+</div>
+
+<script>
+let extractedImages = [];
+
+async function extractImages() {
+  const fileInput = document.getElementById('pdfFile');
+  const file = fileInput.files[0];
+  if (!file) {
+    alert('لطفاً یک فایل PDF انتخاب کنید.');
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = async function(event) {
+    const typedarray = new Uint8Array(event.target.result);
+    const pdf = await pdfjsLib.getDocument(typedarray).promise;
+    
+    extractedImages = [];
+    const imageContainer = document.getElementById('imageContainer');
+    imageContainer.innerHTML = '';
+
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const viewport = page.getViewport({ scale: 3.0 });
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d');
+      canvas.height = viewport.height;
+      canvas.width = viewport.width;
+
+      await page.render({ canvasContext: context, viewport: viewport }).promise;
+
+      const imageData = canvas.toDataURL('image/png');
+      extractedImages.push(imageData);
+
+      const imgWrapper = document.createElement('div');
+      imgWrapper.className = 'image-wrapper';
+      const img = document.createElement('img');
+      img.src = imageData;
+      img.alt = `تصویر استخراج‌شده ${i}`;
+      imgWrapper.appendChild(img);
+      imgWrapper.addEventListener('click', zoomImage); // اضافه کردن زوم چند مرحله‌ای
+      imageContainer.appendChild(imgWrapper);
+    }
+
+    document.getElementById('imageCount').textContent = `تعداد تصاویر: ${extractedImages.length}`;
+    document.getElementById('downloadButton').style.display = 'inline';
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function zoomImage(event) {
+  const imgWrapper = event.currentTarget;
+  const currentScale = imgWrapper.style.transform ? parseFloat(imgWrapper.style.transform.replace('scale(', '').replace(')', '')) : 1;
+  
+  if (currentScale >= 5) { // محدود کردن زوم تا 5 برابر
+    imgWrapper.style.transform = 'scale(1)';
+    imgWrapper.style.cursor = 'zoom-in';
+  } else {
+    imgWrapper.style.transform = `scale(${currentScale + 1})`; // هر بار زوم رو 1 واحد افزایش بده
+    imgWrapper.style.cursor = 'zoom-out';
+  }
+}
+
+function downloadHtml() {
+  if (extractedImages.length === 0) {
+    alert('لطفاً ابتدا تصاویر را از PDF استخراج کنید.');
+    return;
+  }
+
+  const htmlContent = `
+<!DOCTYPE html>
+<html lang="fa">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>تصاویر استخراج‌شده</title>
+  <style>
+    body { font-family: 'Tahoma', sans-serif; direction: rtl; }
+    .image-container { display: flex; flex-wrap: wrap; }
+    .image-wrapper { margin: 10px; transition: transform 0.25s ease; cursor: zoom-in; position: relative; }
+    img { max-width: 100%; height: auto; border-radius: 5px; }
+    .image-wrapper:active { transform: scale(1); cursor: zoom-out; }
+  </style>
+</head>
+<body>
+  <div class="image-container">
+    ${extractedImages.map((imageData, index) => `
+      <div class="image-wrapper" style="transform: scale(1);">
+        <img src="${imageData}" alt="تصویر استخراج‌شده ${index + 1}">
+      </div>
+    `).join('')}
+  </div>
+</body>
+</html>
+  `;
+
+  const blob = new Blob([htmlContent], { type: 'text/html' });
+  saveAs(blob, 'extracted_images.html');
+}
+</script>
+</body>
+</html>
